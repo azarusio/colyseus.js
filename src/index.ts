@@ -1,6 +1,7 @@
 import './legacy';
 
 export { Client, JoinOptions } from './Client';
+export { Connection } from './Connection';
 export { Protocol, ErrorCode } from './Protocol';
 export { Room, RoomAvailable } from './Room';
 export { Auth, Platform, Device } from "./Auth";

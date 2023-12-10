@@ -2,14 +2,14 @@ import { ITransport, ITransportEventMap } from "./transport/ITransport";
 import { WebSocketTransport } from "./transport/WebSocketTransport";
 
 export class Connection implements ITransport {
-    transport: ITransport;
+    transport: WebSocketTransport;
     events: ITransportEventMap = {};
 
     constructor() {
         this.transport = new WebSocketTransport(this.events);
     }
 
-    send(data: ArrayBuffer | Array<number>): void {
+    send(data: ArrayBuffer | Array<number> | string): void {
         this.transport.send(data);
     }
 

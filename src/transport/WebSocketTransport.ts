@@ -4,17 +4,19 @@ import { ITransport, ITransportEventMap } from "./ITransport";
 const WebSocket = globalThis.WebSocket || NodeWebSocket;
 
 export class WebSocketTransport implements ITransport {
-    ws: WebSocket | NodeWebSocket;
+    public ws: WebSocket | NodeWebSocket;
     protocols?: string | string[];
 
     constructor(public events: ITransportEventMap) {}
 
-    public send(data: ArrayBuffer | Array<number>): void {
+    public send(data: ArrayBuffer | Array<number> | string): void {
         if (data instanceof ArrayBuffer) {
             this.ws.send(data);
 
         } else if (Array.isArray(data)) {
             this.ws.send((new Uint8Array(data)).buffer);
+        } else {
+            this.ws.send(data);
         }
     }
 
@@ -34,5 +36,6 @@ export class WebSocketTransport implements ITransport {
     get isOpen() {
         return this.ws.readyState === WebSocket.OPEN;
     }
+
 
 }
