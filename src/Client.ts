@@ -1,8 +1,8 @@
-import { post, get } from "httpie";
-
 import { ServerError } from './errors/ServerError';
 import { Room, RoomAvailable } from './Room';
 import { SchemaConstructor } from './serializer/SchemaSerializer';
+import { HTTP } from "./HTTP";
+import { Auth } from './Auth';
 
 export type JoinOptions = any;
 
@@ -29,6 +29,9 @@ export interface EndpointSettings {
 }
 
 export class Client {
+    public http: HTTP;
+    public auth: Auth;
+
     protected settings: EndpointSettings;
 
     constructor(settings: string | EndpointSettings = DEFAULT_ENDPOINT) {
@@ -42,7 +45,7 @@ export class Client {
 
             this.settings = {
                 hostname: url.hostname,
-                pathname: url.pathname !== "/" ? url.pathname : "",
+                pathname: url.pathname,
                 port,
                 secure
             };
@@ -59,6 +62,14 @@ export class Client {
             }
             this.settings = settings;
         }
+
+        // make sure pathname does not end with "/"
+        if (this.settings.pathname.endsWith("/")) {
+            this.settings.pathname = this.settings.pathname.slice(0, -1);
+        }
+
+        this.http = new HTTP(this);
+        this.auth = new Auth(this.http);
     }
 
     public async joinOrCreate<T>(roomName: string, options: JoinOptions = {}, rootSchema?: SchemaConstructor<T>) {
@@ -89,12 +100,15 @@ export class Client {
             throw new Error("DEPRECATED: .reconnect() now only accepts 'reconnectionToken' as argument.\nYou can get this token from previously connected `room.reconnectionToken`");
         }
         const [roomId, token] = reconnectionToken.split(":");
+		if (!roomId || !token) {
+			throw new Error("Invalid reconnection token format.\nThe format should be roomId:reconnectionToken");
+		}
         return await this.createMatchMakeRequest<T>('reconnect', roomId, { reconnectionToken: token }, rootSchema);
     }
 
     public async getAvailableRooms<Metadata = any>(roomName: string = ""): Promise<RoomAvailable<Metadata>[]> {
         return (
-            await get(this.getHttpEndpoint(`${roomName}`), {
+            await this.http.get(`matchmake/${roomName}`, {
                 headers: {
                     'Accept': 'application/json'
                 }
@@ -165,7 +179,7 @@ export class Client {
         reuseRoomInstance?: Room,
     ) {
         const response = (
-            await post(this.getHttpEndpoint(`${method}/${roomName}`), {
+            await this.http.post(`matchmake/${method}/${roomName}`, {
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
@@ -174,6 +188,7 @@ export class Client {
             })
         ).data;
 
+        // FIXME: HTTP class is already handling this as ServerError.
         if (response.error) {
             throw new MatchMakeError(response.error, response.code);
         }
@@ -193,6 +208,7 @@ export class Client {
     protected buildEndpoint(room: any, options: any = {}) {
         const params = [];
 
+        // append provided options
         for (const name in options) {
             if (!options.hasOwnProperty(name)) {
                 continue;
@@ -215,7 +231,8 @@ export class Client {
     }
 
     protected getHttpEndpoint(segments: string = '') {
-        return `${(this.settings.secure) ? "https" : "http"}://${this.settings.hostname}${this.getEndpointPort()}${this.settings.pathname}/matchmake/${segments}`;
+        const path = segments.startsWith("/") ? segments : `/${segments}`;
+        return `${(this.settings.secure) ? "https" : "http"}://${this.settings.hostname}${this.getEndpointPort()}${this.settings.pathname}${path}`;
     }
 
     protected getEndpointPort() {
